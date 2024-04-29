@@ -1,7 +1,7 @@
 import psycopg2
 import chess
 import chess.svg
-from weasyprint import HTML
+from weasyprint import HTML, CSS
 from jinja2 import Template
 
 
@@ -20,7 +20,7 @@ def query_database():
         cursor = connection.cursor()
         
         # Execute SQL query
-        cursor.execute(f"SELECT puzzleid, fen, moves, rating, themes FROM lichesspuzzle WHERE rating > 1300 LIMIT 15;")
+        cursor.execute(f"SELECT puzzleid, fen, moves, rating, themes FROM lichesspuzzle WHERE rating > 2000 ORDER BY RANDOM() LIMIT 2;")
         
         # Fetch all rows
         rows = cursor.fetchall()
@@ -51,30 +51,40 @@ def query_database():
                 'moves': row[2],
                 'rating': row[3],
                 'themes': row[4],
-                'svg': chess.svg.board(board, orientation=chess.WHITE if row[1].split()[1] == 'w' else chess.BLACK, size=400)
+                'svg': chess.svg.board(board, orientation=chess.WHITE if row[1].split()[1] == 'w' else chess.BLACK, size=330),
+                'color': 'White to play' if row[1].split()[1] == 'w' else 'Black to play',
+                'theme': row[4].split(' ')[0].capitalize()
             }
 
         # Insert the variables into a HTML string (jinja!)
         html_string_template = '''
-        <tr>
-            <th>Puzzles</th>
-        </tr>
-        <ul>
+        
             {% for puzzle in puzzles %}
-                <li> {{ puzzles[puzzle]['svg'] }} </li>
+                <div style="display:flex;">
+                    <div style="width: 100%; height: 100%;"> {{ puzzles[puzzle]['svg'] }} </div>
+
+                    <div style="width: 100%;">
+                        <div style="">
+                            <h1 style="text-align:center; text-decoration:underline;">{{puzzles[puzzle]['theme']}}</h1>
+                            <h2 style="text-align:center;">{{puzzles[puzzle]['color']}}</h2>
+                            <h2 style="text-align:center;">{{puzzles[puzzle]['rating']}}</h2>
+                            
+                        </div>
+                    </div>
+                </div>
+                <hr style="margin: 2rem 0">
             {% endfor %}
-        </ul>
+       
         '''
 
         # Tell the script that my HTML string is a real HTML template
         template = Template(html_string_template)
 
-        # Create HTML file (if not exists) and render the jinja template
-        with open("prueba.html", "w") as file:
-            file.write(template.render(puzzles=data))  # Pass the variables to the jinja template
+        css = CSS(string='@page { size: A4; margin: 1.5cm; }')
 
-        # Grab the recently created HTML file and create a PDF file from it
-        HTML(filename='./prueba.html').write_pdf('./lichess.pdf')
+        # Grab the HTML template string and create a PDF file from it
+        HTML(string=template.render(puzzles=data)).write_pdf('./lichess.pdf', stylesheets=[css])
+
 
     except (Exception, psycopg2.Error) as error:
         print("Error while connecting to PostgreSQL", error)
