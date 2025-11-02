@@ -5,7 +5,7 @@ Generate a PDF file with some chess puzzles.
 As this is a work in progress, the PDF generation is only working locally.
 If you want to test it you will need to setup the Lichess puzzle database on your machine.
 
-- Download the CSV file with all puzzle data from the Lichess website.
+- Download the CSV file with all puzzle data from the Lichess [website](https://database.lichess.org/#puzzles).
 - Copy that data to a local PostgreSQL database. If you are using `psql` and Ubuntu you may try the following:
   - Create the table on your psql session:
     - `CREATE TABLE chess_puzzles (
