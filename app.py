@@ -7,22 +7,20 @@ from dotenv import dotenv_values
 
 config = dotenv_values(".env")
 
-def query_database():
+# Connect to the database
+connection = psycopg2.connect(
+    dbname=config["DB_NAME"],
+    user=config["USER"],
+    password=config["PASSWORD"],
+    host=config["HOST"],
+    port=config["PORT"]
+)
+
+def get_puzzles_data(amount):
+    """Returns dictionary with all the relevant puzzle data."""
     try:
-        # Connect to the database
-        connection = psycopg2.connect(
-            dbname=config["DB_NAME"],
-            user=config["USER"],
-            password=config["PASSWORD"],
-            host=config["HOST"],
-            port=config["PORT"]
-        )
-        
-        # Create a cursor object
         cursor = connection.cursor()
-        
-        # Execute SQL query
-        cursor.execute(f"SELECT puzzleid, fen, moves, rating, themes, gameurl FROM puzzles ORDER BY RANDOM() LIMIT 11;")
+        cursor.execute(f"SELECT puzzleid, fen, moves, rating, themes, gameurl FROM puzzles ORDER BY RANDOM() LIMIT {amount};")
         
         # Fetch all rows
         rows = cursor.fetchall()
@@ -47,8 +45,8 @@ def query_database():
 
             # The solution to the puzzle after converting UCI to SAN.
             solution = board.variation_san([chess.Move.from_uci(m) for m in solution_list[1:]])
-           
-           # Add all the data to a dict to make it more manageable and readable
+            
+            # Add all the data to a dict to make it more manageable and readable
             data[row[0]] = {
                 'puzzleid': row[0],
                 'fen': row[1],
@@ -64,76 +62,10 @@ def query_database():
 
             puzzle_counter += 1
 
-        # Insert the variables into a HTML string (jinja!)
-        html_string_template_2_per_page = '''
-        
-            {% for puzzle in puzzles %}
-                <div style="display:flex;">
-                    <div style="width: 100%; height: 100%;"> {{ puzzles[puzzle]['svg'] }} </div>
-
-                    <div style="width: 100%;">
-                        <div style="">
-                            <h1 style="text-align:center; text-decoration:underline;">#{{puzzles[puzzle]['puzzlecounter']}} {{puzzles[puzzle]['theme']}}</h1>
-                            <h2 style="text-align:center;">{{puzzles[puzzle]['color']}}</h2>
-                            <h2 style="text-align:center;">{{puzzles[puzzle]['rating']}}</h2>
-                            
-                        </div>
-                    </div>
-                </div>
-                
-                <div style="text-align: right;">https://lichess.org/training/{{puzzles[puzzle]['puzzleid']}}</div>
-                
-                <hr style="margin: 2rem 0">
-            {% endfor %}
-            <h2>Solutions</h2>
-            {% for puzzle in puzzles %}
-                <li style="list-style-type: none;">#{{puzzles[puzzle]['puzzlecounter']}} - {{puzzles[puzzle]['moves']}}</li>
-            {% endfor %}
-       
-        '''
-
-        html_string_template_grid = '''
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
-                {% for puzzle in puzzles %}
-                    <div>
-                        <div style="display: flex; justify-content: space-between;">
-                            <p>#{{puzzles[puzzle]['puzzlecounter']}}</p>
-                            <p>{{puzzles[puzzle]['color']}}</p>
-                            <p>{{puzzles[puzzle]['rating']}}</p>
-                        </div>    
-                        <div style="width: 100%; height: 100%;">
-                            {{ puzzles[puzzle]['svg'] }}
-                            <div style="text-align: right; font-size: 10px;">https://lichess.org/training/{{puzzles[puzzle]['puzzleid']}}</div>
-                        </div>
-                        
-                    </div>
-                    
-                {% endfor %}
-            </div>
-
-            <div style="page-break-before: always; height: 100%;"></div>
-
-            <h2>Solutions</h2>
-            {% for puzzle in puzzles %}
-                <li style="list-style-type: none;">#{{puzzles[puzzle]['puzzlecounter']}} - {{puzzles[puzzle]['moves']}}</li>
-            {% endfor %}
-
-       
-        '''
-
-        # Tell the script that my HTML string is an HTML template
-        # template = Template(html_string_template_2_per_page)
-        template = Template(html_string_template_grid)
-
-        css = CSS(string='@page { size: A4; margin: 1.5cm; }')
-
-        # Grab the HTML template string and create a PDF file from it
-        HTML(string=template.render(puzzles=data)).write_pdf('./lichess.pdf', stylesheets=[css])
-
+        return data
 
     except (Exception, psycopg2.Error) as error:
         print("Error while connecting to PostgreSQL:", error)
-   
     finally:
         # Close cursor and connection
         if connection:
@@ -141,5 +73,76 @@ def query_database():
             connection.close()
             print("PostgreSQL connection is closed")
 
+
+def generate_puzzles_pdf():
+    data = get_puzzles_data(amount=10)
+    
+    # Generate HTML template
+    html_string_template_2_per_page = '''
+    
+        {% for puzzle in puzzles %}
+            <div style="display:flex;">
+                <div style="width: 100%; height: 100%;"> {{ puzzles[puzzle]['svg'] }} </div>
+
+                <div style="width: 100%;">
+                    <div style="">
+                        <h1 style="text-align:center; text-decoration:underline;">#{{puzzles[puzzle]['puzzlecounter']}} {{puzzles[puzzle]['theme']}}</h1>
+                        <h2 style="text-align:center;">{{puzzles[puzzle]['color']}}</h2>
+                        <h2 style="text-align:center;">{{puzzles[puzzle]['rating']}}</h2>
+                        
+                    </div>
+                </div>
+            </div>
+            
+            <div style="text-align: right;">https://lichess.org/training/{{puzzles[puzzle]['puzzleid']}}</div>
+            
+            <hr style="margin: 2rem 0">
+        {% endfor %}
+        <h2>Solutions</h2>
+        {% for puzzle in puzzles %}
+            <li style="list-style-type: none;">#{{puzzles[puzzle]['puzzlecounter']}} - {{puzzles[puzzle]['moves']}}</li>
+        {% endfor %}
+    
+    '''
+
+    html_string_template_grid = '''
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+            {% for puzzle in puzzles %}
+                <div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <p>#{{puzzles[puzzle]['puzzlecounter']}}</p>
+                        <p>{{puzzles[puzzle]['color']}}</p>
+                        <p>{{puzzles[puzzle]['rating']}}</p>
+                    </div>    
+                    <div style="width: 100%; height: 100%;">
+                        {{ puzzles[puzzle]['svg'] }}
+                        <div style="text-align: right; font-size: 10px;">https://lichess.org/training/{{puzzles[puzzle]['puzzleid']}}</div>
+                    </div>
+                    
+                </div>
+                
+            {% endfor %}
+        </div>
+
+        <div style="page-break-before: always; height: 100%;"></div>
+
+        <h2>Solutions</h2>
+        {% for puzzle in puzzles %}
+            <li style="list-style-type: none;">#{{puzzles[puzzle]['puzzlecounter']}} - {{puzzles[puzzle]['moves']}}</li>
+        {% endfor %}
+    '''
+
+    # Tell the script that my HTML string is an HTML template
+    # template = Template(html_string_template_2_per_page)
+    template = Template(html_string_template_grid)
+
+    css = CSS(string='@page { size: A4; margin: 1.5cm; }')
+
+    # Grab the HTML template string and create a PDF file from it
+    HTML(string=template.render(puzzles=data)).write_pdf('./lichess.pdf', stylesheets=[css])
+
+
+    
+
 # Call the function to execute the query
-query_database()
+generate_puzzles_pdf()
