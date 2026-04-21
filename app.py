@@ -16,11 +16,16 @@ connection = psycopg2.connect(
     port=config["PORT"]
 )
 
-def get_puzzles_data(amount):
+def get_puzzles_data(rating_min, rating_max, amount):
     """Returns dictionary with all the relevant puzzle data."""
     try:
         cursor = connection.cursor()
-        cursor.execute(f"SELECT puzzleid, fen, moves, rating, themes, gameurl FROM puzzles ORDER BY RANDOM() LIMIT {amount};")
+        cursor.execute(f"""SELECT puzzleid, fen, moves, rating, themes, gameurl 
+                           FROM puzzles
+                           WHERE rating >= {rating_min} AND rating <= {rating_max} 
+                           ORDER BY RANDOM() 
+                           LIMIT {amount};
+                        """)
         
         # Fetch all rows
         rows = cursor.fetchall()
@@ -75,7 +80,7 @@ def get_puzzles_data(amount):
 
 
 def generate_puzzles_pdf(paper_size):
-    data = get_puzzles_data(amount=13)
+    data = get_puzzles_data(2000, 2500, amount=13)
 
     html_string_template_grid = '''
     <style>
